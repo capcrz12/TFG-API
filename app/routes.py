@@ -26,6 +26,18 @@ def get_route(id):
 
     return record
 
+@router.get("/get_routes/{name}")
+def get_route(name: str):
+    connection = get_connection()
+    cursor = connection.cursor(dictionary=True)
+    query = "SELECT * FROM Route WHERE LOWER(name) LIKE LOWER(%s)"
+    cursor.execute(query, ('%' + name + '%',))
+    record = cursor.fetchall()
+    cursor.close()
+    connection.close()
+
+    return record
+
 
 
 @router.post("/add_route")
