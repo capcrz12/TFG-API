@@ -26,13 +26,20 @@ def get_route(id):
 
     return record
 
+# Devuelve las rutas cuyo nombre o ubicacion contengan la cadena {name}
 @router.get("/get_routes/{name}")
 def get_route(name: str):
     connection = get_connection()
     cursor = connection.cursor(dictionary=True)
-    query = "SELECT * FROM Route WHERE LOWER(name) LIKE LOWER(%s)"
-    cursor.execute(query, ('%' + name + '%',))
+    
+    query = """
+        SELECT * FROM Route 
+        WHERE LOWER(name) LIKE LOWER(%s) 
+        OR LOWER(ubication) LIKE LOWER(%s)
+    """
+    cursor.execute(query, ('%' + name + '%', '%' + name + '%'))
     record = cursor.fetchall()
+    
     cursor.close()
     connection.close()
 
