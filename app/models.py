@@ -9,3 +9,7 @@ class Route(BaseModel):
     max_alt: float
     min_des: float
     max_des: float
+
+class User(BaseModel):
+    email: str
+    password: str
