@@ -6,6 +6,7 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from app.models import User
+from app.database import get_connection
 
 router = APIRouter()
 
@@ -32,12 +33,11 @@ def verify_password(plain_password, hashed_password):
 def get_password_hash(password):
     return pwd_context.hash(password)
 
-def authenticate_user(fake_db, email: str, password: str):
-    user = fake_db.get(email)
-    print(user)
+def authenticate_user(email: str, password: str):
+    user = get_user_by_email(email)
     if not user:
         return False
-    if not verify_password(password, user["hashed_password"]):
+    if not verify_password(password, user["password"]):
         return False
     return user
 
@@ -54,7 +54,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
 
 @router.post("/login")
 async def login(user: User):
-    user_dict = authenticate_user(fake_users_db, user.email, user.password)
+    user_dict = authenticate_user(user.email, user.password)
     if not user_dict:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -66,3 +66,36 @@ async def login(user: User):
         data={"sub": user.email}, expires_delta=access_token_expires
     )
     return {"access_token": access_token, "token_type": "bearer"}
+
+def get_user_by_email(email: str):
+    connection = get_connection()
+    cursor = connection.cursor(dictionary=True)
+    cursor.execute("SELECT email, password FROM Usuario WHERE email = %s", (email,))
+    user = cursor.fetchone()
+    cursor.close()
+    connection.close()
+    return user
+
+def create_user(email: str, hashed_password: str):
+    connection = get_connection()
+    cursor = connection.cursor()
+    cursor.execute("INSERT INTO Usuario (email, password) VALUES (%s, %s)", (email, hashed_password))
+    connection.commit()
+    cursor.close()
+    connection.close()
+
+@router.post("/register", status_code=status.HTTP_201_CREATED)
+async def register(user: User):
+    # Verificar si el usuario ya existe
+    existing_user = get_user_by_email(user.email)
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El usuario ya está registrado."
+        )
+
+    # Guardar el usuario en la base de datos
+    hashed_password = get_password_hash(user.password)
+    create_user(user.email, hashed_password)
+    
+    return {"msg": "Usuario registrado exitosamente."}
