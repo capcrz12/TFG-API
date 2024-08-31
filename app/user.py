@@ -7,16 +7,21 @@ from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from app.models import User
 from app.database import get_connection
+from app.verify import send_verification_email
+import os
+from dotenv import load_dotenv
+from datetime import datetime
+
+load_dotenv()
+
+secret_key = os.getenv('SECRET_KEY')
+algorithm = os.getenv('ALGORITHM')
+token_min = int(os.getenv('ACCESS_TOKEN_EXPIRE_MINUTES'))
 
 router = APIRouter()
 
 # Para gestionar contraseñas
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-# Variable de entorno para la clave secreta
-SECRET_KEY = "mysecretkey"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 
 # Base de datos falsa (en un caso real esto sería una consulta a una base de datos)
@@ -49,7 +54,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     else:
         expire = datetime.utcnow() + timedelta(minutes=15)
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    encoded_jwt = jwt.encode(to_encode, secret_key, algorithm=algorithm)
     return encoded_jwt
 
 @router.post("/login")
@@ -61,7 +66,7 @@ async def login(user: User):
             detail="Invalid credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token_expires = timedelta(minutes=token_min)
     access_token = create_access_token(
         data={"sub": user.email}, expires_delta=access_token_expires
     )
@@ -84,18 +89,35 @@ def create_user(email: str, hashed_password: str):
     cursor.close()
     connection.close()
 
+def store_user_temporarily(email: str, password: str):
+    hashed_password = get_password_hash(password)
+    terms_accepted = datetime.now()
+
+    connection = get_connection()
+    cursor = connection.cursor()
+    cursor.execute("INSERT INTO UsuarioTemp (email, password, terms_accepted) VALUES (%s, %s, %s)", (email, hashed_password, terms_accepted))
+    connection.commit()
+    connection.close()
+
+def create_verification_token(email: str):
+    expire = datetime.utcnow() + timedelta(minutes=token_min)
+    to_encode = {"email": email, "exp": expire}
+    return jwt.encode(to_encode, secret_key, algorithm=algorithm)
+
 @router.post("/register", status_code=status.HTTP_201_CREATED)
-async def register(user: User):
+async def register_user(user: User):
     # Verificar si el usuario ya existe
-    existing_user = get_user_by_email(user.email)
-    if existing_user:
+    if get_user_by_email(user.email):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="El usuario ya está registrado."
         )
 
-    # Guardar el usuario en la base de datos
-    hashed_password = get_password_hash(user.password)
-    create_user(user.email, hashed_password)
+    # Generar token de verificación
+    token = create_verification_token(user.email)
+    send_verification_email(user.email, token)
     
-    return {"msg": "Usuario registrado exitosamente."}
+    # Guardar temporalmente el usuario en la base de datos
+    store_user_temporarily(user.email, user.password)
+    
+    return {"msg": "Se ha enviado un correo de verificación. Por favor, verifica tu cuenta."}
