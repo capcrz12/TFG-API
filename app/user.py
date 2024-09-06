@@ -9,6 +9,7 @@ from app.models import User
 from app.database import get_connection
 from app.verify import send_verification_email
 import os
+from fastapi.security import OAuth2PasswordBearer
 from dotenv import load_dotenv
 from datetime import datetime
 
@@ -24,14 +25,6 @@ router = APIRouter()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
-# Base de datos falsa (en un caso real esto sería una consulta a una base de datos)
-fake_users_db = {
-    "carlosperezcruz01@gmail.com": {
-        "email": "carlosperezcruz01@gmail.com",
-        "hashed_password": pwd_context.hash("1234"),
-    }
-}
-
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
 
@@ -45,7 +38,6 @@ def authenticate_user(email: str, password: str):
     if not verify_password(password, user["password"]):
         return False
     return user
-
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
@@ -68,14 +60,15 @@ async def login(user: User):
         )
     access_token_expires = timedelta(minutes=token_min)
     access_token = create_access_token(
-        data={"sub": user.email}, expires_delta=access_token_expires
+        data={"sub": user_dict['email'], "id": user_dict['id']}, 
+        expires_delta=access_token_expires
     )
     return {"access_token": access_token, "token_type": "bearer"}
 
 def get_user_by_email(email: str):
     connection = get_connection()
     cursor = connection.cursor(dictionary=True)
-    cursor.execute("SELECT email, password FROM Usuario WHERE email = %s", (email,))
+    cursor.execute("SELECT id, email, password FROM Usuario WHERE email = %s", (email,))
     user = cursor.fetchone()
     cursor.close()
     connection.close()
@@ -103,6 +96,23 @@ def create_verification_token(email: str):
     expire = datetime.utcnow() + timedelta(minutes=token_min)
     to_encode = {"email": email, "exp": expire}
     return jwt.encode(to_encode, secret_key, algorithm=algorithm)
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+
+def get_current_user(token: str = Depends(oauth2_scheme)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, secret_key, algorithms=[algorithm])
+        user_id: str = payload.get("id")
+        if user_id is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+    return user_id
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 async def register_user(user: User):
