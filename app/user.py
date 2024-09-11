@@ -24,6 +24,8 @@ router = APIRouter()
 # Para gestionar contraseñas
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+
 
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
@@ -82,13 +84,14 @@ def create_user(email: str, hashed_password: str):
     cursor.close()
     connection.close()
 
-def store_user_temporarily(email: str, password: str):
+def store_user_temporarily(name: str, email: str, password: str):
     hashed_password = get_password_hash(password)
     terms_accepted = datetime.now()
+    total_km = 0
 
     connection = get_connection()
     cursor = connection.cursor()
-    cursor.execute("INSERT INTO UsuarioTemp (email, password, terms_accepted) VALUES (%s, %s, %s)", (email, hashed_password, terms_accepted))
+    cursor.execute("INSERT INTO UsuarioTemp (nombre, email, password, terms_accepted, total_km) VALUES (%s, %s, %s, %s, %s)", (name, email, hashed_password, terms_accepted, total_km))
     connection.commit()
     connection.close()
 
@@ -96,23 +99,6 @@ def create_verification_token(email: str):
     expire = datetime.utcnow() + timedelta(minutes=token_min)
     to_encode = {"email": email, "exp": expire}
     return jwt.encode(to_encode, secret_key, algorithm=algorithm)
-
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
-
-def get_current_user(token: str = Depends(oauth2_scheme)):
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        payload = jwt.decode(token, secret_key, algorithms=[algorithm])
-        user_id: str = payload.get("id")
-        if user_id is None:
-            raise credentials_exception
-    except JWTError:
-        raise credentials_exception
-    return user_id
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 async def register_user(user: User):
@@ -128,6 +114,57 @@ async def register_user(user: User):
     send_verification_email(user.email, token)
     
     # Guardar temporalmente el usuario en la base de datos
-    store_user_temporarily(user.email, user.password)
+    store_user_temporarily(user.name, user.email, user.password)
     
     return {"msg": "Se ha enviado un correo de verificación. Por favor, verifica tu cuenta."}
+
+@router.get("/get_user_by_id/{id}")
+def get_user_by_id(id: str):
+    connection = get_connection()
+    cursor = connection.cursor(dictionary=True)
+    cursor.execute("SELECT id, nombre, email, total_km FROM Usuario WHERE id = %s", (id,))
+    user = cursor.fetchone()
+    cursor.close()
+    connection.close()
+    return user
+
+@router.get("/get_current_user")
+def get_current_user(token: str = Depends(oauth2_scheme)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, secret_key, algorithms=[algorithm])
+        user_id: str = payload.get("id")
+        if user_id is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+    return user_id
+
+def get_total_km(id: int):
+    connection = get_connection()
+    cursor = connection.cursor(dictionary=True)
+    cursor.execute("SELECT total_km FROM Usuario WHERE id = %s", (id,))
+    km = cursor.fetchone()
+    cursor.close()
+    connection.close()
+    return km
+
+def update_total_km(id: int, value: int):
+    connection = get_connection()
+    cursor = connection.cursor(dictionary=True)
+    cursor.execute("UPDATE Usuario SET total_km = %s WHERE id = %s", (value, id,))
+    connection.commit()
+    cursor.close()
+
+def get_users_followed(id: int):
+    connection = get_connection()
+    cursor = connection.cursor(dictionary=True)
+    cursor.execute("SELECT id_usuario_seguido FROM Usuario_Seguimiento WHERE id_usuario_seguidor = %s", (id,))
+    records = cursor.fetchall()
+    cursor.close()
+    connection.close()
+    return records

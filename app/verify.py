@@ -62,7 +62,7 @@ def send_verification_email(email: str, token: str):
 def register_verified_user(email: str):
     connection = get_connection()
     cursor = connection.cursor()
-    cursor.execute("INSERT INTO Usuario (email, password, terms_accepted) SELECT email, password, terms_accepted FROM UsuarioTemp WHERE email=%s", (email,))
+    cursor.execute("INSERT INTO Usuario (nombre, email, password, terms_accepted, total_km) SELECT nombre, email, password, terms_accepted, total_km FROM UsuarioTemp WHERE email=%s", (email,))
     cursor.execute("DELETE FROM UsuarioTemp WHERE email=%s", (email,))
     connection.commit()
     connection.close()

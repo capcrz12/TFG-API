@@ -15,5 +15,6 @@ class Route(BaseModel):
     lon: float
 
 class User(BaseModel):
+    name: str
     email: str
     password: str

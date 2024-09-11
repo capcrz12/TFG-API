@@ -3,7 +3,7 @@ from fastapi.responses import FileResponse
 from app.models import Route
 from app.database import get_connection
 from datetime import datetime
-from app.user import get_current_user
+from app.user import get_current_user, get_total_km, update_total_km, get_users_followed
 import shutil
 import os
 
@@ -17,6 +17,49 @@ def get_routes():
     records = cursor.fetchall()
     cursor.close()
     connection.close()
+
+    return records
+
+@router.get("/get_routes_and_user")
+def get_routes_and_user():
+    connection = get_connection()
+    cursor = connection.cursor(dictionary=True)
+
+    # Hacemos un JOIN entre Route y Usuario
+    query = """
+        SELECT Route.*, Usuario.id AS user_id, Usuario.nombre AS user_name, Usuario.email AS user_email
+        FROM Route
+        JOIN Usuario ON Route.id_usuario = Usuario.id
+    """
+    
+    cursor.execute(query)
+    records = cursor.fetchall()
+
+    # Formatear los datos para que el id_usuario sea un objeto con información del usuario
+    for record in records:
+        record['id_usuario'] = {
+            "id": record.pop('user_id'),  # Eliminamos el campo separado de user_id y lo incluimos en id_usuario
+            "nombre": record.pop('user_name'),
+            "email": record.pop('user_email')
+        }
+
+    cursor.close()
+    connection.close()
+
+    return records
+
+@router.get("/get_routes_followed/{id}")
+def get_routes_followed(id: int):
+
+    authors = get_users_followed(id)
+   
+    records = []
+
+    for author in authors:
+        res = get_routes_by_author(author['id_usuario_seguido'])
+        for result in res:
+            if result != []:
+                records.append(result)
 
     return records
 
@@ -50,7 +93,36 @@ def get_route(name: str):
 
     return record
 
-# Asegúrate de que este endpoint esté definido en el archivo principal de tu API
+# Devuelve las rutas segun el autor
+@router.get("/get_routes_by_author/{id}")
+def get_routes_by_author(id: str):
+    connection = get_connection()
+    cursor = connection.cursor(dictionary=True)
+
+    # Hacemos un JOIN entre Route y Usuario
+    query = """
+        SELECT Route.*, Usuario.id AS user_id, Usuario.nombre AS user_name, Usuario.email AS user_email
+        FROM Route
+        JOIN Usuario ON Route.id_usuario = Usuario.id
+        WHERE Route.id_usuario = %s
+    """
+    
+    cursor.execute(query, (id,))
+    records = cursor.fetchall()
+
+    # Formatear los datos para que el id_usuario sea un objeto con información del usuario
+    for record in records:
+        record['id_usuario'] = {
+            "id": record.pop('user_id'),  # Eliminamos el campo separado de user_id y lo incluimos en id_usuario
+            "nombre": record.pop('user_name'),
+            "email": record.pop('user_email')
+        }
+
+    cursor.close()
+    connection.close()
+
+    return records
+
 @router.get("/get_gpx/{filename}")
 def get_gpx_file(filename: str):
     file_path = os.path.join("assets/gpx", filename)
@@ -91,6 +163,13 @@ def add_route(route: str = Form(...), gpx: UploadFile = File(...), id_usuario: i
             route_data['lat'] += 0.0001  # Ajustar la latitud
             # route_data['lon'] += 0.0001  # También podrías ajustar la longitud si es necesario
 
+
+        # Añadir los km al total realizados por el usuario
+        total_km = get_total_km(id_usuario) 
+
+        km = total_km + route_data['km']
+
+        update_total_km(id_usuario, km)
 
         # Directorio donde se guardará el archivo GPX
         directory = "assets/gpx"
@@ -133,3 +212,4 @@ def add_route(route: str = Form(...), gpx: UploadFile = File(...), id_usuario: i
         print(f"Error al añadir la ruta: {e}")
         raise HTTPException(status_code=500, detail=str(e))
         
+
