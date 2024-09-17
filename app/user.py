@@ -5,7 +5,7 @@ from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
-from app.models import User
+from app.models import User, IdPasswd
 from app.database import get_connection
 from app.verify import send_verification_email
 import os
@@ -100,6 +100,13 @@ def create_verification_token(email: str):
     to_encode = {"email": email, "exp": expire}
     return jwt.encode(to_encode, secret_key, algorithm=algorithm)
 
+@router.post("/check_password")
+def check_password(user: IdPasswd):
+    userId = get_user_by_id(user.id)
+
+    return verify_password(user.password, userId["password"])
+    
+
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 async def register_user(user: User):
     # Verificar si el usuario ya existe
@@ -122,7 +129,7 @@ async def register_user(user: User):
 def get_user_by_id(id: str):
     connection = get_connection()
     cursor = connection.cursor(dictionary=True)
-    cursor.execute("SELECT id, nombre, email, total_km FROM Usuario WHERE id = %s", (id,))
+    cursor.execute("SELECT id, nombre, email, total_km, password FROM Usuario WHERE id = %s", (id,))
     user = cursor.fetchone()
     cursor.close()
     connection.close()
@@ -143,6 +150,19 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
     except JWTError:
         raise credentials_exception
     return user_id
+
+@router.post("/update_profile")
+def update_profile(user: User):
+    connection = get_connection()
+    cursor = connection.cursor(dictionary=True)
+    if user.password != '':
+        hashed_password = get_password_hash(user.password)
+        cursor.execute("UPDATE Usuario SET nombre = %s, password = %s WHERE id = %s", (user.name, hashed_password, user.id,))
+    else:
+        cursor.execute("UPDATE Usuario SET nombre = %s WHERE id = %s", (user.name, user.id,))
+
+    connection.commit()
+    cursor.close()
 
 def get_total_km(id: int):
     connection = get_connection()

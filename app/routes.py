@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
 from fastapi.responses import FileResponse
-from app.models import Route
+from app.models import Route, RouteId
 from app.database import get_connection
 from datetime import datetime
 from app.user import get_current_user, get_total_km, update_total_km, get_users_followed
@@ -131,6 +131,61 @@ def get_gpx_file(filename: str):
     else:
         raise HTTPException(status_code=404, detail="File not found")
 
+@router.post("/update_route")
+def update_route(route: Route):
+    try: 
+        fecha = datetime.now()
+
+        connection = get_connection()
+        cursor = connection.cursor()
+        query = """
+            UPDATE Route SET name = %s, ubication = %s, description = %s, estimated_time = %s, km = %s, 
+            speed = %s, min_alt = %s, max_alt = %s, pos_desnivel = %s, neg_desnivel = %s, fecha = %s, lat = %s, lon = %s
+            WHERE id = %s
+        """        
+
+        values = (route.name, route.ubication, route.description, route.estimated_time, 
+                route.km, route.speed, route.min_alt, route.max_alt, route.pos_desnivel, route.neg_desnivel, 
+                fecha, route.lat, route.lon, route.id)
+        cursor.execute(query, values)
+        connection.commit()
+        cursor.close()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating route: {str(e)}")
+
+
+
+@router.post("/delete_route")
+def delete_route(request: RouteId):
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    # Recuperar el nombre del fichero .gpx antes de eliminar la ruta
+    cursor.execute("SELECT gpx FROM Route WHERE id = %s", (request.id,))
+    result = cursor.fetchone()
+    
+    if not result:
+        cursor.close()
+        connection.close()
+        raise HTTPException(status_code=404, detail="Route not found")
+    
+    gpx = result[0]
+
+    cursor.execute("DELETE FROM Route WHERE id = %s", (request.id,))
+    connection.commit()
+    cursor.close()
+    connection.close()
+
+    # Ruta completa hacia el fichero .gpx en la carpeta 'assets'
+    gpx_file_path = os.path.join('assets/gpx', gpx)
+    
+    # Eliminar el fichero .gpx si existe
+    if os.path.exists(gpx_file_path):
+        os.remove(gpx_file_path)
+    else:
+        print(f"El fichero {gpx_file_path} no existe")
+
+
 
 @router.post("/add_route")
 def add_route(route: str = Form(...), gpx: UploadFile = File(...), id_usuario: int = Depends(get_current_user)):
@@ -140,12 +195,9 @@ def add_route(route: str = Form(...), gpx: UploadFile = File(...), id_usuario: i
     try:
         fecha = datetime.now()
 
-        print(f"Nombre del archivo GPX: {gpx.filename}")
-
         # Convertir el string route en un objeto JSON
         import json
         route_data = json.loads(route)  # Convertir el string JSON a un diccionario
-        print(f"Datos de la ruta: {route_data}")
 
         # Verificar si ya existe una ruta con las mismas coordenadas
         connection = get_connection()
@@ -165,9 +217,9 @@ def add_route(route: str = Form(...), gpx: UploadFile = File(...), id_usuario: i
 
 
         # Añadir los km al total realizados por el usuario
-        total_km = get_total_km(id_usuario) 
+        total_km = get_total_km(id_usuario)
 
-        km = total_km + route_data['km']
+        km = total_km['total_km'] + route_data['km']
 
         update_total_km(id_usuario, km)
 
