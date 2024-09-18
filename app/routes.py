@@ -6,6 +6,8 @@ from datetime import datetime
 from app.user import get_current_user, get_total_km, update_total_km, get_users_followed
 import shutil
 import os
+import json
+from typing import List
 
 router = APIRouter()
 
@@ -73,6 +75,45 @@ def get_route(id):
     connection.close()
 
     return record
+
+@router.get("/get_route_images/{id}")
+def get_route_images(id: str):
+    # Carpeta donde se almacenan las imágenes en la API
+    image_folder_path = f"./assets/images/{id}/"
+    
+    if not os.path.exists(image_folder_path):
+        raise HTTPException(status_code=404, detail="Carpeta de imágenes no encontrada")
+
+    # Obtener imágenes almacenadas en la base de datos (suponiendo JSON en columna 'images')
+    connection = get_connection()
+    cursor = connection.cursor()
+    
+    cursor.execute("SELECT filename FROM ImageRoute WHERE route_id = %s", (id,))
+    result = cursor.fetchall()
+
+    cursor.close()
+    connection.close()
+
+    if not result:
+        raise HTTPException(status_code=404, detail="Imágenes no encontradas para esta ruta")
+
+    image_filenames = [row[0] for row in result]
+    
+    # Genera las URLs de las imágenes
+    image_urls = []
+    base_url = "http://localhost:8000"
+    for filename in image_filenames:
+        image_path = os.path.join(image_folder_path, filename)
+        if os.path.exists(image_path):
+            image_url = f"{base_url}/assets/images/{id}/{filename}"  # Esta es la ruta donde las imágenes son accesibles
+            image_urls.append(image_url)
+
+    if not image_urls:
+        raise HTTPException(status_code=404, detail="No se encontraron imágenes válidas para esta ruta")
+
+
+    return image_urls
+
 
 # Devuelve las rutas cuyo nombre o ubicacion contengan la cadena {name}
 @router.get("/get_routes/{name}")
@@ -171,20 +212,51 @@ def delete_route(request: RouteId):
     
     gpx = result[0]
 
+    cursor.execute("DELETE FROM ImageRoute WHERE route_id = %s", (request.id,))
+    connection.commit()
+
     cursor.execute("DELETE FROM Route WHERE id = %s", (request.id,))
     connection.commit()
+
     cursor.close()
     connection.close()
 
-    # Ruta completa hacia el fichero .gpx en la carpeta 'assets'
-    gpx_file_path = os.path.join('assets/gpx', gpx)
-    
-    # Eliminar el fichero .gpx si existe
-    if os.path.exists(gpx_file_path):
-        os.remove(gpx_file_path)
-    else:
-        print(f"El fichero {gpx_file_path} no existe")
+    delete_images(request.id)
+    delete_file(gpx)
 
+
+def delete_file(gpx: str):
+    try:
+        # Ruta completa hacia el fichero .gpx en la carpeta 'assets'
+        gpx_file_path = os.path.join('assets/gpx', gpx)
+        
+        # Eliminar el fichero .gpx si existe
+        if os.path.exists(gpx_file_path):
+            os.remove(gpx_file_path)
+        else:
+            print(f"El fichero {gpx_file_path} no existe")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al eliminar el fichero gpx: {str(e)}")
+
+
+def delete_images(id: int):
+    try:
+        # Ruta de la carpeta de imágenes que se desea eliminar
+        image_folder_path = f"./assets/images/{id}/"
+        
+        # Verificar si la carpeta existe
+        if not os.path.exists(image_folder_path):
+            raise HTTPException(status_code=404, detail="Carpeta de imágenes no encontrada")
+        
+        # Eliminar la carpeta y su contenido
+        shutil.rmtree(image_folder_path)
+
+        print(image_folder_path)
+        
+        return {"message": "Carpeta de imágenes eliminada exitosamente"}
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al eliminar la carpeta de imágenes: {str(e)}")
 
 
 @router.post("/add_route")
@@ -207,6 +279,7 @@ def add_route(route: str = Form(...), gpx: UploadFile = File(...), id_usuario: i
             WHERE ABS(lat - %s) < 0.0001 AND ABS(lon - %s) < 0.0001
         """, (route_data['lat'], route_data['lon']))
         existing_route = cursor.fetchone()
+        
         cursor.close()
 
         # Ajustar las coordenadas si se encuentra una coincidencia
@@ -257,11 +330,62 @@ def add_route(route: str = Form(...), gpx: UploadFile = File(...), id_usuario: i
                   fecha, route_data['lat'], route_data['lon'], id_usuario)
         cursor.execute(query, values)
         connection.commit()
+
+        id = cursor.lastrowid
+
         cursor.close()
+
         print("Ruta añadida exitosamente a la base de datos")
-        return {"message": "Route added successfully!"}
+        return {"message": "Route added successfully!", "id":id}
     except Exception as e:
         print(f"Error al añadir la ruta: {e}")
         raise HTTPException(status_code=500, detail=str(e))
         
 
+
+@router.post("/upload_images/{id}")
+async def upload_images(id: int, images: List[UploadFile] = File(...)):
+    try:
+        # Carpeta donde se almacenan las imágenes
+        image_folder_path = f"./assets/images/{id}/"
+        if not os.path.exists(image_folder_path):
+            os.makedirs(image_folder_path)
+
+        # Guardar los nombres de las imágenes subidas
+        image_names = []
+        for image in images:
+            base_filename, extension = os.path.splitext(image.filename)
+            image_filename = image.filename
+            image_path = os.path.join(image_folder_path, image_filename)
+            
+            # Asegurarse de que el nombre del archivo sea único
+            counter = 1
+            while os.path.exists(image_path):
+                image_filename = f"{base_filename}_{counter}{extension}"
+                image_path = os.path.join(image_folder_path, image_filename)
+                counter += 1
+
+            # Guardar la imagen en el archivo
+            with open(image_path, "wb") as image_file:
+                shutil.copyfileobj(image.file, image_file)
+                
+            image_names.append(image_filename)
+
+        # Insertar los nombres de las imágenes en la base de datos
+        connection = get_connection()
+        cursor = connection.cursor()
+        
+        for image_name in image_names:
+            cursor.execute(
+                "INSERT INTO ImageRoute (route_id, filename) VALUES (%s, %s)",
+                (id, image_name)
+            )
+        
+        connection.commit()
+        cursor.close()
+        connection.close()
+
+        return {"message": "Images uploaded and database updated successfully"}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error uploading images: {str(e)}")

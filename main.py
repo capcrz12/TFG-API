@@ -3,8 +3,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.user import router as user_router
 from app.routes import router as routes_router
 from app.verify import router as verify_router
+from fastapi.staticfiles import StaticFiles
 
 app = FastAPI()
+
+# Monta la carpeta de imágenes para ser servida como estática
+app.mount("/assets/images", StaticFiles(directory="./assets/images"), name="images")
 
 # Configuración de CORS
 app.add_middleware(
