@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
 from fastapi.responses import FileResponse
-from app.models import Route, RouteId
+from app.models import Route, RouteId, ImageRoute
 from app.database import get_connection
 from datetime import datetime
 from app.user import get_current_user, get_total_km, update_total_km, get_users_followed
@@ -238,6 +238,29 @@ def delete_file(gpx: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al eliminar el fichero gpx: {str(e)}")
 
+@router.post("/delete_route_image")
+def delete_route_image (request: ImageRoute):
+    try:
+        # Ruta de la carpeta de imágenes que se desea eliminar
+        image_folder_path = f"./assets/images/{request.id}/"
+        
+        # Verificar si la carpeta existe
+        if not os.path.exists(image_folder_path):
+            raise HTTPException(status_code=404, detail="Carpeta de imágenes no encontrada")
+        
+        file_path = os.path.join(image_folder_path, request.image)
+
+        # Eliminar el fichero .gpx si existe
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        else:
+            print(f"El fichero {file_path} no existe")
+        
+        return {"message": "Carpeta de imágenes eliminada exitosamente"}
+    
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al eliminar la imagen de la ruta: {str(e)}")
 
 def delete_images(id: int):
     try:

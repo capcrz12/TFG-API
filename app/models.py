@@ -28,3 +28,7 @@ class User(BaseModel):
 class IdPasswd(BaseModel):
     id: int
     password: str
+
+class ImageRoute(BaseModel):
+    id: int
+    image: str
