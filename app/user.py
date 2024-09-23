@@ -1,17 +1,20 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel
 from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
-from app.models import User, IdPasswd
+from app.models import User, IdPasswd, IdImage
 from app.database import get_connection
 from app.verify import send_verification_email
 import os
 from fastapi.security import OAuth2PasswordBearer
 from dotenv import load_dotenv
 from datetime import datetime
+from typing import List
+import shutil
+
 
 load_dotenv()
 
@@ -129,10 +132,18 @@ async def register_user(user: User):
 def get_user_by_id(id: str):
     connection = get_connection()
     cursor = connection.cursor(dictionary=True)
-    cursor.execute("SELECT id, nombre, email, total_km, password FROM Usuario WHERE id = %s", (id,))
+    cursor.execute("SELECT id, nombre, email, total_km, password, photo FROM Usuario WHERE id = %s", (id,))
     user = cursor.fetchone()
     cursor.close()
     connection.close()
+
+    base_url = "http://localhost:8000"
+
+    if (user['photo'] != None):
+        user['photo'] = f"{base_url}/assets/images/users/{id}/{user['photo']}"
+    else:
+        user['photo'] = ''
+
     return user
 
 @router.get("/get_current_user")
@@ -163,6 +174,60 @@ def update_profile(user: User):
 
     connection.commit()
     cursor.close()
+
+@router.post("/update_profile_photo/{id}")
+def update_profile_photo(id: int, image: UploadFile = File(...)):
+    try:
+
+        # Eliminamos la foto de perfil antigua de la carpeta assets
+        delete_profile_photo(id, image)
+
+        # Añadimos la nueva foto de perfil a la carpeta assets
+        add_profile_photo(id, image)
+
+        # Modificamos el nombre del archivo en la base de datos
+        connection = get_connection()
+        cursor = connection.cursor(dictionary=True)
+
+        cursor.execute("UPDATE Usuario SET photo = %s WHERE id = %s", (image.filename, id,))
+
+        connection.commit()
+        cursor.close()
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error uploading image: {str(e)}")    
+
+
+def delete_profile_photo(id: int, image: UploadFile = File(...)):
+    #Carpeta donde se almacenan las imágenes
+    image_folder_path = f"./assets/images/users/{id}/"
+
+    # Verificar si la carpeta existe
+    if not os.path.exists(image_folder_path):
+        raise HTTPException(status_code=404, detail="Carpeta de imágenes no encontrada")
+
+    # Eliminamos todos los archivos de la carpeta
+    for archivo in os.listdir(image_folder_path):
+        ruta_archivo = os.path.join(image_folder_path, archivo)
+        
+        # Verificar si es archivo
+        if os.path.isfile(ruta_archivo) or os.path.islink(ruta_archivo):
+            os.unlink(ruta_archivo)  # Eliminar archivo o enlace simbólico
+
+    
+def add_profile_photo(id: int, image: UploadFile = File(...)):
+    #Carpeta donde se almacenan las imágenes
+    image_folder_path = f"./assets/images/users/{id}/"
+
+    if not os.path.exists(image_folder_path):
+        os.makedirs(image_folder_path)
+
+    image_filename = image.filename
+    image_path = os.path.join(image_folder_path, image_filename)
+        
+    # Guardar la imagen en el archivo
+    with open(image_path, "wb") as image_file:
+        shutil.copyfileobj(image.file, image_file)
 
 def get_total_km(id: int):
     connection = get_connection()

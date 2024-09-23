@@ -29,6 +29,6 @@ class IdPasswd(BaseModel):
     id: int
     password: str
 
-class ImageRoute(BaseModel):
+class IdImage(BaseModel):
     id: int
     image: str

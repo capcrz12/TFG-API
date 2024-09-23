@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
 from fastapi.responses import FileResponse
-from app.models import Route, RouteId, ImageRoute
+from app.models import Route, RouteId, IdImage
 from app.database import get_connection
 from datetime import datetime
 from app.user import get_current_user, get_total_km, update_total_km, get_users_followed
@@ -79,7 +79,7 @@ def get_route(id):
 @router.get("/get_route_images/{id}")
 def get_route_images(id: str):
     # Carpeta donde se almacenan las imágenes en la API
-    image_folder_path = f"./assets/images/{id}/"
+    image_folder_path = f"./assets/images/routes/{id}/"
     
     if not os.path.exists(image_folder_path):
         raise HTTPException(status_code=404, detail="Carpeta de imágenes no encontrada")
@@ -105,7 +105,7 @@ def get_route_images(id: str):
     for filename in image_filenames:
         image_path = os.path.join(image_folder_path, filename)
         if os.path.exists(image_path):
-            image_url = f"{base_url}/assets/images/{id}/{filename}"  # Esta es la ruta donde las imágenes son accesibles
+            image_url = f"{base_url}/assets/images/routes/{id}/{filename}"  # Esta es la ruta donde las imágenes son accesibles
             image_urls.append(image_url)
 
     if not image_urls:
@@ -142,7 +142,7 @@ def get_routes_by_author(id: str):
 
     # Hacemos un JOIN entre Route y Usuario
     query = """
-        SELECT Route.*, Usuario.id AS user_id, Usuario.nombre AS user_name, Usuario.email AS user_email
+        SELECT Route.*, Usuario.id AS user_id, Usuario.nombre AS user_name, Usuario.email AS user_email, Usuario.photo AS user_photo
         FROM Route
         JOIN Usuario ON Route.id_usuario = Usuario.id
         WHERE Route.id_usuario = %s
@@ -151,13 +151,26 @@ def get_routes_by_author(id: str):
     cursor.execute(query, (id,))
     records = cursor.fetchall()
 
+    base_url = "http://localhost:8000"
+
     # Formatear los datos para que el id_usuario sea un objeto con información del usuario
     for record in records:
-        record['id_usuario'] = {
-            "id": record.pop('user_id'),  # Eliminamos el campo separado de user_id y lo incluimos en id_usuario
-            "nombre": record.pop('user_name'),
-            "email": record.pop('user_email')
-        }
+        id = record['user_id']
+        
+        if (record['user_photo'] != None):
+            record['id_usuario'] = {
+                "id": record.pop('user_id'),  # Eliminamos el campo separado de user_id y lo incluimos en id_usuario
+                "nombre": record.pop('user_name'),
+                "email": record.pop('user_email'),
+                "photo": f"{base_url}/assets/images/users/{id}/"+record.pop('user_photo')
+            }
+        else:
+            record['id_usuario'] = {
+                "id": record.pop('user_id'),  # Eliminamos el campo separado de user_id y lo incluimos en id_usuario
+                "nombre": record.pop('user_name'),
+                "email": record.pop('user_email'),
+                "photo": ''
+            }
 
     cursor.close()
     connection.close()
@@ -239,10 +252,10 @@ def delete_file(gpx: str):
         raise HTTPException(status_code=500, detail=f"Error al eliminar el fichero gpx: {str(e)}")
 
 @router.post("/delete_route_image")
-def delete_route_image (request: ImageRoute):
+def delete_route_image (request: IdImage):
     try:
         # Ruta de la carpeta de imágenes que se desea eliminar
-        image_folder_path = f"./assets/images/{request.id}/"
+        image_folder_path = f"./assets/images/routes/{request.id}/"
         
         # Verificar si la carpeta existe
         if not os.path.exists(image_folder_path):
@@ -265,7 +278,7 @@ def delete_route_image (request: ImageRoute):
 def delete_images(id: int):
     try:
         # Ruta de la carpeta de imágenes que se desea eliminar
-        image_folder_path = f"./assets/images/{id}/"
+        image_folder_path = f"./assets/images/routes/{id}/"
         
         # Verificar si la carpeta existe
         if not os.path.exists(image_folder_path):
@@ -370,7 +383,7 @@ def add_route(route: str = Form(...), gpx: UploadFile = File(...), id_usuario: i
 async def upload_images(id: int, images: List[UploadFile] = File(...)):
     try:
         # Carpeta donde se almacenan las imágenes
-        image_folder_path = f"./assets/images/{id}/"
+        image_folder_path = f"./assets/images/routes/{id}/"
         if not os.path.exists(image_folder_path):
             os.makedirs(image_folder_path)
 
