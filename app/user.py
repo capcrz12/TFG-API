@@ -168,22 +168,64 @@ def get_followeds(id: int):
     connection = get_connection()
     cursor = connection.cursor(dictionary=True)
 
-    cursor.execute("SELECT * FROM Usuario_Seguimiento WHERE id_usuario_seguidor = %s", (id,))
+    query = """
+        SELECT Usuario_Seguimiento.id_usuario_seguido, Usuario.nombre AS user_name, Usuario.email AS user_email, Usuario.photo AS user_photo
+        FROM Usuario_Seguimiento
+        JOIN Usuario ON Usuario_Seguimiento.id_usuario_seguido = Usuario.id
+        WHERE id_usuario_seguidor = %s
+    """
+    
+    cursor.execute(query, (id,))
 
-    record = cursor.fetchall()
+    records = cursor.fetchall()
 
     connection.commit()
     cursor.close()
 
-    return record
+    base_url = "http://localhost:8000"
+
+    for user in records:
+        if (user['user_photo'] != None):
+            user['user_photo'] = f"{base_url}/assets/images/users/{user['id_usuario_seguido']}/{user['user_photo']}"
+        else:
+            user['user_photo'] = ''
+
+    return records
+
+@router.get("/get_followers/{id}")
+def get_followeds(id: int):
+    connection = get_connection()
+    cursor = connection.cursor(dictionary=True)
+
+    query = """
+        SELECT Usuario_Seguimiento.id_usuario_seguidor, Usuario.nombre AS user_name, Usuario.email AS user_email, Usuario.photo AS user_photo
+        FROM Usuario_Seguimiento
+        JOIN Usuario ON Usuario_Seguimiento.id_usuario_seguidor = Usuario.id
+        WHERE id_usuario_seguido = %s
+    """
+    
+    cursor.execute(query, (id,))
+
+    records = cursor.fetchall()
+
+    connection.commit()
+    cursor.close()
+
+    base_url = "http://localhost:8000"
+
+    for user in records:
+        if (user['user_photo'] != None):
+            user['user_photo'] = f"{base_url}/assets/images/users/{user['id_usuario_seguidor']}/{user['user_photo']}"
+        else:
+            user['user_photo'] = ''
+
+    return records
 
 
 @router.post("/follow")
 def follow(request: Follow):
     connection = get_connection()
     cursor = connection.cursor(dictionary=True)
-
-    print(request)
 
     cursor.execute("INSERT INTO Usuario_Seguimiento (id_usuario_seguidor, id_usuario_seguido) VALUES (%s, %s)", (request.id_follower,request.id_followed,))
 
@@ -195,8 +237,6 @@ def follow(request: Follow):
 def unfollow(request: Follow):
     connection = get_connection()
     cursor = connection.cursor(dictionary=True)
-
-    print(request)
 
     cursor.execute("DELETE FROM Usuario_Seguimiento WHERE id_usuario_seguidor = %s AND id_usuario_seguido = %s", (request.id_follower,request.id_followed,))
 
