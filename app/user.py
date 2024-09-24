@@ -5,7 +5,7 @@ from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
-from app.models import User, IdPasswd, IdImage
+from app.models import User, IdPasswd, IdImage, Follow
 from app.database import get_connection
 from app.verify import send_verification_email
 import os
@@ -161,6 +161,48 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
     except JWTError:
         raise credentials_exception
     return user_id
+
+
+@router.get("/get_followeds/{id}")
+def get_followeds(id: int):
+    connection = get_connection()
+    cursor = connection.cursor(dictionary=True)
+
+    cursor.execute("SELECT * FROM Usuario_Seguimiento WHERE id_usuario_seguidor = %s", (id,))
+
+    record = cursor.fetchall()
+
+    connection.commit()
+    cursor.close()
+
+    return record
+
+
+@router.post("/follow")
+def follow(request: Follow):
+    connection = get_connection()
+    cursor = connection.cursor(dictionary=True)
+
+    print(request)
+
+    cursor.execute("INSERT INTO Usuario_Seguimiento (id_usuario_seguidor, id_usuario_seguido) VALUES (%s, %s)", (request.id_follower,request.id_followed,))
+
+    connection.commit()
+    cursor.close()
+
+
+@router.post("/unfollow")
+def unfollow(request: Follow):
+    connection = get_connection()
+    cursor = connection.cursor(dictionary=True)
+
+    print(request)
+
+    cursor.execute("DELETE FROM Usuario_Seguimiento WHERE id_usuario_seguidor = %s AND id_usuario_seguido = %s", (request.id_follower,request.id_followed,))
+
+    connection.commit()
+    cursor.close()
+
 
 @router.post("/update_profile")
 def update_profile(user: User):

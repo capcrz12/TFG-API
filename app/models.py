@@ -32,3 +32,7 @@ class IdPasswd(BaseModel):
 class IdImage(BaseModel):
     id: int
     image: str
+
+class Follow(BaseModel):
+    id_follower: int
+    id_followed: int

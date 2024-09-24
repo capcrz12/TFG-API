@@ -69,10 +69,41 @@ def get_routes_followed(id: int):
 def get_route(id):
     connection = get_connection()
     cursor = connection.cursor(dictionary=True)
-    cursor.execute("SELECT * FROM Route WHERE id = %s", (id,))
-    record = cursor.fetchone()  # Usamos fetchone porque solo esperamos una fila
+
+    cursor = connection.cursor(dictionary=True)
+
+    # Hacemos un JOIN entre Route y Usuario
+    query = """
+        SELECT Route.*, Usuario.id AS user_id, Usuario.nombre AS user_name, Usuario.email AS user_email, Usuario.photo AS user_photo
+        FROM Route
+        JOIN Usuario ON Route.id_usuario = Usuario.id
+        WHERE Route.id = %s
+    """
+    
+    cursor.execute(query, (id,))
+    record = cursor.fetchone()
     cursor.close()
     connection.close()
+
+    base_url = "http://localhost:8000"
+
+    # Formatear los datos para que el id_usuario sea un objeto con información del usuario
+    id_usuario = record['user_id']
+        
+    if (record['user_photo'] != None):
+        record['id_usuario'] = {
+            "id": record.pop('user_id'),  # Eliminamos el campo separado de user_id y lo incluimos en id_usuario
+            "nombre": record.pop('user_name'),
+            "email": record.pop('user_email'),
+            "photo": f"{base_url}/assets/images/users/{id_usuario}/"+record.pop('user_photo')
+        }
+    else:
+        record['id_usuario'] = {
+            "id": record.pop('user_id'),  # Eliminamos el campo separado de user_id y lo incluimos en id_usuario
+            "nombre": record.pop('user_name'),
+            "email": record.pop('user_email'),
+            "photo": ''
+        }
 
     return record
 
