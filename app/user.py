@@ -146,6 +146,37 @@ def get_user_by_id(id: str):
 
     return user
 
+
+# Devuelve los usuarios cuyo nombre contengan la cadena {name}
+@router.get("/get_users/{name}")
+def get_users(name: str):
+    connection = get_connection()
+    cursor = connection.cursor(dictionary=True)
+    
+    query = """
+        SELECT * FROM Usuario 
+        WHERE LOWER(nombre) LIKE LOWER(%s) 
+    """
+    cursor.execute(query, ('%' + name + '%',))
+    records = cursor.fetchall()
+    
+    cursor.close()
+    connection.close()
+
+    base_url = "http://localhost:8000"
+
+    for user in records:
+        if (user['photo'] != None):
+            user['photo'] = f"{base_url}/assets/images/users/{user['id']}/{user['photo']}"
+        else:
+            user['photo'] = ''
+
+    return records
+
+
+    return records
+
+
 @router.get("/get_current_user")
 def get_current_user(token: str = Depends(oauth2_scheme)):
     credentials_exception = HTTPException(
