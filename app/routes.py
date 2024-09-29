@@ -340,11 +340,12 @@ def add_route(route: str = Form(...), gpx: UploadFile = File(...), id_usuario: i
 
         # Verificar si ya existe una ruta con las mismas coordenadas
         connection = get_connection()
-        cursor = connection.cursor(dictionary=True)
+        cursor = connection.cursor(buffered=True, dictionary=True)
         cursor.execute("""
             SELECT * FROM Route
             WHERE ABS(lat - %s) < 0.0001 AND ABS(lon - %s) < 0.0001
         """, (route_data['lat'], route_data['lon']))
+
         existing_route = cursor.fetchone()
         
         cursor.close()
@@ -411,8 +412,11 @@ def add_route(route: str = Form(...), gpx: UploadFile = File(...), id_usuario: i
 
 
 @router.post("/upload_images/{id}")
-async def upload_images(id: int, images: List[UploadFile] = File(...)):
+async def upload_images(id: int, images: List[UploadFile] = File(...), coords: str = Form(...)):
     try:
+
+        coords_data = json.loads(coords)
+
         # Carpeta donde se almacenan las imágenes
         image_folder_path = f"./assets/images/routes/{id}/"
         if not os.path.exists(image_folder_path):
@@ -441,11 +445,21 @@ async def upload_images(id: int, images: List[UploadFile] = File(...)):
         # Insertar los nombres de las imágenes en la base de datos
         connection = get_connection()
         cursor = connection.cursor()
+
+        print(image_names)
         
-        for image_name in image_names:
+        for i, image_name in enumerate(image_names):
+            print(id)
+
+            lat_value = coords_data[i]['lat'] if coords_data[i] else None
+            lon_value = coords_data[i]['lon'] if coords_data[i] else None
+
+            print(lat_value)
+            print(lon_value)
+
             cursor.execute(
-                "INSERT INTO ImageRoute (route_id, filename) VALUES (%s, %s)",
-                (id, image_name)
+                "INSERT INTO ImageRoute (route_id, filename, lat, lon) VALUES (%s, %s, %s, %s)",
+                (id, image_name, lat_value, lon_value)
             )
         
         connection.commit()

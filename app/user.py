@@ -163,19 +163,16 @@ def get_users(name: str):
     cursor.close()
     connection.close()
 
-    base_url = "http://localhost:8000"
+    if records:
+        base_url = "http://localhost:8000"
 
-    for user in records:
-        if (user['photo'] != None):
-            user['photo'] = f"{base_url}/assets/images/users/{user['id']}/{user['photo']}"
-        else:
-            user['photo'] = ''
-
-    return records
-
+        for user in records:
+            if (user['photo'] != None):
+                user['photo'] = f"{base_url}/assets/images/users/{user['id']}/{user['photo']}"
+            else:
+                user['photo'] = ''
 
     return records
-
 
 @router.get("/get_current_user")
 def get_current_user(token: str = Depends(oauth2_scheme)):
@@ -317,7 +314,7 @@ def delete_profile_photo(id: int, image: UploadFile = File(...)):
 
     # Verificar si la carpeta existe
     if not os.path.exists(image_folder_path):
-        raise HTTPException(status_code=404, detail="Carpeta de imágenes no encontrada")
+        return
 
     # Eliminamos todos los archivos de la carpeta
     for archivo in os.listdir(image_folder_path):
