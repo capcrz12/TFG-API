@@ -119,7 +119,7 @@ def get_route_images(id: str):
     connection = get_connection()
     cursor = connection.cursor()
     
-    cursor.execute("SELECT filename FROM ImageRoute WHERE route_id = %s", (id,))
+    cursor.execute("SELECT filename, lat, lon FROM ImageRoute WHERE route_id = %s", (id,))
     result = cursor.fetchall()
 
     cursor.close()
@@ -128,22 +128,24 @@ def get_route_images(id: str):
     if not result:
         raise HTTPException(status_code=404, detail="Imágenes no encontradas para esta ruta")
 
-    image_filenames = [row[0] for row in result]
-    
+    image_data = []
+
     # Genera las URLs de las imágenes
-    image_urls = []
     base_url = "http://localhost:8000"
-    for filename in image_filenames:
+    for record in result:
+
+        filename, lat, lon = record
+
         image_path = os.path.join(image_folder_path, filename)
         if os.path.exists(image_path):
-            image_url = f"{base_url}/assets/images/routes/{id}/{filename}"  # Esta es la ruta donde las imágenes son accesibles
-            image_urls.append(image_url)
+            image_dict = {
+                "filename": f"{base_url}/assets/images/routes/{id}/{filename}",
+                "lat": lat,
+                "lon": lon
+            }
+            image_data.append(image_dict)
 
-    if not image_urls:
-        raise HTTPException(status_code=404, detail="No se encontraron imágenes válidas para esta ruta")
-
-
-    return image_urls
+    return image_data
 
 
 # Devuelve las rutas cuyo nombre o ubicacion contengan la cadena {name}
