@@ -85,7 +85,7 @@ def get_route(id):
     cursor.close()
     connection.close()
 
-    base_url = "http://localhost:8000"
+    base_url = os.getenv('URL')
 
     # Formatear los datos para que el id_usuario sea un objeto con información del usuario
     id_usuario = record['user_id']
@@ -131,7 +131,7 @@ def get_route_images(id: str):
     image_data = []
 
     # Genera las URLs de las imágenes
-    base_url = "http://localhost:8000"
+    base_url = os.getenv('URL')
     for record in result:
 
         filename, lat, lon = record
@@ -184,7 +184,7 @@ def get_routes_by_author(id: str):
     cursor.execute(query, (id,))
     records = cursor.fetchall()
 
-    base_url = "http://localhost:8000"
+    base_url = os.getenv('URL')
 
     # Formatear los datos para que el id_usuario sea un objeto con información del usuario
     for record in records:
@@ -258,17 +258,25 @@ def delete_route(request: RouteId):
     
     gpx = result[0]
 
-    cursor.execute("DELETE FROM ImageRoute WHERE route_id = %s", (request.id,))
-    connection.commit()
+    delete_file(gpx)
+
+    cursor.execute("SELECT * FROM ImageRoute WHERE route_id = %s", (request.id,))
+    result = cursor.fetchall()
+
+    print(result)
+
+    if result:
+        print("Eliminando imágenes")
+        cursor.execute("DELETE FROM ImageRoute WHERE route_id = %s", (request.id,))
+        connection.commit()
+
+        delete_images(request.id)
 
     cursor.execute("DELETE FROM Route WHERE id = %s", (request.id,))
     connection.commit()
 
     cursor.close()
     connection.close()
-
-    delete_images(request.id)
-    delete_file(gpx)
 
 
 def delete_file(gpx: str):
@@ -374,19 +382,6 @@ def add_route(route: str = Form(...), gpx: UploadFile = File(...), id_usuario: i
             os.makedirs(directory)
             print(f"Directorio {directory} creado")
 
-        # Generar un nombre único para el archivo GPX
-        base_filename, extension = os.path.splitext(gpx.filename)
-        new_filename = gpx.filename
-        counter = 1
-        while os.path.exists(os.path.join(directory, new_filename)):
-            new_filename = f"{base_filename}_{counter}{extension}"
-            counter += 1
-
-        # Guardar el archivo en una carpeta específica
-        file_location = os.path.join(directory, new_filename)
-        with open(file_location, "wb") as file_object:
-            shutil.copyfileobj(gpx.file, file_object)
-            print(f"Archivo guardado en {file_location}")
 
         connection = get_connection()    
         cursor = connection.cursor()
@@ -395,13 +390,36 @@ def add_route(route: str = Form(...), gpx: UploadFile = File(...), id_usuario: i
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
 
-        values = (new_filename, route_data['name'], route_data['ubication'], route_data['description'], route_data['estimated_time'], 
+        values = (gpx.filename, route_data['name'], route_data['ubication'], route_data['description'], route_data['estimated_time'], 
                   route_data['km'], route_data['speed'], route_data['min_alt'], route_data['max_alt'], route_data['pos_desnivel'], route_data['neg_desnivel'], 
                   fecha, route_data['lat'], route_data['lon'], id_usuario)
         cursor.execute(query, values)
         connection.commit()
 
         id = cursor.lastrowid
+
+        print(id)
+
+        # Generar un nombre único para el archivo GPX añadiendole el id de la ruta
+        base_filename, extension = os.path.splitext(gpx.filename)
+        new_filename = gpx.filename
+        new_filename = f"{base_filename}{id}{extension}"
+
+        print(new_filename)
+
+        # Guardar el archivo en una carpeta específica
+        file_location = os.path.join(directory, new_filename)
+        with open(file_location, "wb") as file_object:
+            shutil.copyfileobj(gpx.file, file_object)
+            print(f"Archivo guardado en {file_location}")
+
+        query = """
+            UPDATE Route SET gpx = %s WHERE id = %s
+        """
+
+        values = (new_filename, id)
+        cursor.execute(query, values)
+        connection.commit()
 
         cursor.close()
 

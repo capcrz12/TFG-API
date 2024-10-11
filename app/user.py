@@ -137,7 +137,7 @@ def get_user_by_id(id: str):
     cursor.close()
     connection.close()
 
-    base_url = "http://localhost:8000"
+    base_url = os.getenv('URL')
 
     if (user['photo'] != None):
         user['photo'] = f"{base_url}/assets/images/users/{id}/{user['photo']}"
@@ -164,7 +164,7 @@ def get_users(name: str):
     connection.close()
 
     if records:
-        base_url = "http://localhost:8000"
+        base_url = os.getenv('URL')
 
         for user in records:
             if (user['photo'] != None):
@@ -210,7 +210,7 @@ def get_followeds(id: int):
     connection.commit()
     cursor.close()
 
-    base_url = "http://localhost:8000"
+    base_url = os.getenv('URL')
 
     for user in records:
         if (user['user_photo'] != None):
@@ -239,7 +239,7 @@ def get_followeds(id: int):
     connection.commit()
     cursor.close()
 
-    base_url = "http://localhost:8000"
+    base_url = os.getenv('URL')
 
     for user in records:
         if (user['user_photo'] != None):

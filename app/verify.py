@@ -37,7 +37,7 @@ def send_verification_email(email: str, token: str):
             <p>Hola,</p>
             <p>Gracias por registrarse. Por favor, haga clic en el botón de abajo para verificar su correo electrónico. Le redigirá a la página de inicio de sesión</p>
             <p>
-                <a href="http://localhost:8000/verify/verify/{token}" style="
+                <a href="${os.getenv('URL')}/verify/verify/{token}" style=" <a
                     display: inline-block;
                     padding: 10px 20px;
                     font-size: 16px;
@@ -80,7 +80,7 @@ async def verify_user(token: str):
         register_verified_user(email)
 
         # Redirige al usuario a la página de acceso
-        return RedirectResponse(url="http://localhost:4200/acceso", status_code=302)
+        return RedirectResponse(url=f"{os.getenv('URL_FRONT')}/acceso", status_code=302)
 
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token expirado")
