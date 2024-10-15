@@ -351,20 +351,57 @@ def add_route(route: str = Form(...), gpx: UploadFile = File(...), id_usuario: i
         # Verificar si ya existe una ruta con las mismas coordenadas
         connection = get_connection()
         cursor = connection.cursor(buffered=True, dictionary=True)
+
+        existing_route = False
+        change = 0  # Cada vez que encuentra una ruta en las coordenadas, se cambia el valor de change, que cambia lat/lon y +/-
+        value = 0.001
+
+        lat = route_data['lat']
+        lon = route_data['lon']
+
         cursor.execute("""
             SELECT * FROM Route
-            WHERE ABS(lat - %s) < 0.0001 AND ABS(lon - %s) < 0.0001
-        """, (route_data['lat'], route_data['lon']))
+            WHERE (ABS(lat - %s) < 0.001) AND (ABS(lon - %s) < 0.001)
+        """, (lat, lon))
 
         existing_route = cursor.fetchone()
-        
-        cursor.close()
 
-        # Ajustar las coordenadas si se encuentra una coincidencia
-        if existing_route:
+        while existing_route != None:
             print("Ruta existente con coordenadas similares encontrada, ajustando las coordenadas...")
-            route_data['lat'] += 0.0001  # Ajustar la latitud
-            # route_data['lon'] += 0.0001  # También podrías ajustar la longitud si es necesario
+            print(change, value)
+            if change == 0:
+                lat = route_data['lat'] + value  # Ajustar la latitud
+                lon = route_data['lon']
+                change = 1
+            elif change == 1:
+                lon = route_data['lon'] + value  # Ajustar la longitud
+                lat = route_data['lat']
+                change = 2
+            elif change == 2:
+                lat = route_data['lat'] - value  # Ajustar la latitud
+                lon = route_data['lon']
+                change = 3
+            else:
+                lon = route_data['lon'] - value  # Ajustar la longitud
+                lat = route_data['lat']
+                change = 4
+
+            if change == 4:
+                value += 0.001
+                change = 0
+
+            cursor.execute("""
+                SELECT * FROM Route
+            WHERE (ABS(lat - %s) < 0.001 AND ABS(lon - %s) < 0.001)
+            """, (lat, lon))
+
+            existing_route = cursor.fetchone()
+
+
+        route_data['lat'] = lat
+        route_data['lon'] = lon
+
+        cursor.close()
 
 
         # Añadir los km al total realizados por el usuario
@@ -398,14 +435,10 @@ def add_route(route: str = Form(...), gpx: UploadFile = File(...), id_usuario: i
 
         id = cursor.lastrowid
 
-        print(id)
-
         # Generar un nombre único para el archivo GPX añadiendole el id de la ruta
         base_filename, extension = os.path.splitext(gpx.filename)
         new_filename = gpx.filename
         new_filename = f"{base_filename}{id}{extension}"
-
-        print(new_filename)
 
         # Guardar el archivo en una carpeta específica
         file_location = os.path.join(directory, new_filename)
