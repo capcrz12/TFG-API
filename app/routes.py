@@ -370,23 +370,39 @@ def add_route(route: str = Form(...), gpx: UploadFile = File(...), id_usuario: i
             print("Ruta existente con coordenadas similares encontrada, ajustando las coordenadas...")
             print(change, value)
             if change == 0:
-                lat = route_data['lat'] + value  # Ajustar la latitud
+                lat = route_data['lat'] + value  
                 lon = route_data['lon']
                 change = 1
             elif change == 1:
-                lon = route_data['lon'] + value  # Ajustar la longitud
-                lat = route_data['lat']
+                lon = route_data['lon'] + value  
+                lat = route_data['lat'] + value
                 change = 2
             elif change == 2:
-                lat = route_data['lat'] - value  # Ajustar la latitud
-                lon = route_data['lon']
+                lat = route_data['lat']   
+                lon = route_data['lon'] + value
                 change = 3
-            else:
-                lon = route_data['lon'] - value  # Ajustar la longitud
-                lat = route_data['lat']
+            elif change == 3:
+                lon = route_data['lon'] - value  
+                lat = route_data['lat'] + value
                 change = 4
+            elif change == 4:
+                lat = route_data['lat'] - value  
+                lon = route_data['lon']
+                change = 5
+            elif change == 5:
+                lon = route_data['lon'] - value  
+                lat = route_data['lat'] - value
+                change = 6
+            elif change == 6:
+                lat = route_data['lat']  
+                lon = route_data['lon'] - value
+                change = 7
+            elif change == 7:
+                lon = route_data['lon'] + value
+                lat = route_data['lat'] - value
+                change = 8
 
-            if change == 4:
+            if change == 8:
                 value += 0.001
                 change = 0
 
