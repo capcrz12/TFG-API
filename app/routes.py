@@ -3,6 +3,7 @@ from fastapi.responses import FileResponse
 from app.models import Route, RouteId, IdImage
 from app.database import get_connection
 from datetime import datetime
+from dateutil.relativedelta import relativedelta
 from app.user import get_current_user, get_total_km, update_total_km, get_users_followed
 import shutil
 import os
@@ -53,6 +54,8 @@ def get_routes_and_user():
 @router.get("/get_routes_followed/{id}")
 def get_routes_followed(id: int):
 
+    fecha = datetime.now() - relativedelta(months=1)
+
     authors = get_users_followed(id)
    
     records = []
@@ -60,8 +63,14 @@ def get_routes_followed(id: int):
     for author in authors:
         res = get_routes_by_author(author['id_usuario_seguido'])
         for result in res:
-            if result != []:
+            if result != [] and result['fecha'] > fecha.date():
                 records.append(result)
+
+    # Ordenar los resultados por fecha
+    records.sort(key=lambda x: x['fecha'], reverse=True)
+
+    # Limitar los resultados a 20
+    records = records[:20]
 
     return records
 
