@@ -15,7 +15,6 @@ from datetime import datetime
 from typing import List
 import shutil
 
-
 load_dotenv()
 
 secret_key = os.getenv('SECRET_KEY')
