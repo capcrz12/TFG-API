@@ -3,3 +3,4 @@ uvicorn
 python-jose[cryptography]
 passlib[bcrypt]
 mysql-connector-python
+python-dotenv
