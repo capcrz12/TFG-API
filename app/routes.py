@@ -30,7 +30,7 @@ def get_routes_and_user():
 
     # Hacemos un JOIN entre Route y Usuario
     query = """
-        SELECT Route.*, Usuario.id AS user_id, Usuario.nombre AS user_name, Usuario.email AS user_email
+        SELECT Route.*, Usuario.id AS user_id, Usuario.nombre AS user_name
         FROM Route
         JOIN Usuario ON Route.id_usuario = Usuario.id
     """
