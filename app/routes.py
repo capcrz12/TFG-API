@@ -42,8 +42,7 @@ def get_routes_and_user():
     for record in records:
         record['id_usuario'] = {
             "id": record.pop('user_id'),  # Eliminamos el campo separado de user_id y lo incluimos en id_usuario
-            "nombre": record.pop('user_name'),
-            "email": record.pop('user_email')
+            "nombre": record.pop('user_name')
         }
 
     cursor.close()
