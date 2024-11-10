@@ -14,7 +14,7 @@ app.mount("/assets/images", StaticFiles(directory="./assets/images"), name="imag
 # Configuración de CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[os.getenv("URL_FRONT")],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],  # Permitir todos los métodos (GET, POST, etc.)
     allow_headers=["*"],  # Permitir todos los headers
