@@ -121,7 +121,7 @@ def get_route_images(id: str):
     image_folder_path = f"./assets/images/routes/{id}/"
     
     if not os.path.exists(image_folder_path):
-        raise HTTPException(status_code=404, detail="Carpeta de imágenes no encontrada")
+        raise HTTPException(status_code=404, detail=f"Carpeta de imágenes no encontrada: {image_folder_path}")
 
     # Obtener imágenes almacenadas en la base de datos (suponiendo JSON en columna 'images')
     connection = get_connection()
